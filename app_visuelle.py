@@ -342,7 +342,7 @@ elif page_choisie == "⚙️ Aide au réglage débit HCl":
                             
                         # Si le débit est OK mais que le rendement historique est sous les 93%
                         elif membrane_morte:
-                            st.warning("☠️ **Rappel visuel :** Membrane considérée comme **MORTE** (Rendement < 93% sur le tableau de bord).")
+                            st.warning("☠️ **Rappel :** Membrane considérée comme **H.S.** (CE < 93%.")
                         
                         # --- MOTEUR DE DIAGNOSTIC DE RÉGLAGE ---
                         diff_hcl_Lh = q_hcl_theorique - hcl_mesure 
