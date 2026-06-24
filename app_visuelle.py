@@ -281,19 +281,45 @@ elif page_choisie == "⚙️ Aide au réglage débit HCl":
                         st.info(f"**Cibles Théoriques :**\n\n💧 HCl ciblé : **{q_hcl_theorique:.1f} L/h**\n\n💨 O₂ normal : **{pct_o2_theorique_final:.2f} %**")
                         
                       # --- INPUTS MANUELS ---
+                       # 1. Vérification du rendement historique pour le rappel visuel
+                        membrane_morte = False
+                        intensite_defaut = 0.0
+                        
+                        if df is not None and not df.empty:
+                            df_mono = df[df['Electrolyseur'] == str(nom)]
+                            if not df_mono.empty:
+                                # On récupère la dernière ligne pour la valeur par défaut et le rendement
+                                derniere_ligne = df_mono.sort_values('Date').iloc[-1]
+                                derniere_ce = derniere_ligne['CE_Calcule']
+                                intensite_defaut = float(derniere_ligne['I_kA']) # Utilisé comme valeur initiale
+                                
+                                # Vérification du seuil de 93%
+                                if pd.notna(derniere_ce) and derniere_ce < 93.0:
+                                    membrane_morte = True
+
+                        # --- INPUTS MANUELS ---
                         st.markdown("**Mesures Terrain :**")
                         
-                        # Calcul du seuil critique d'alerte (environ 462.56)
-                        seuil_hcl_critique = ((-3.691 * 92) + 362.7) * 20
+                        # 2. Saisie manuelle de l'intensité par l'utilisateur
+                        intensite_actuelle = st.number_input(
+                            f"Intensité actuelle (kA)",
+                            min_value=0.0,
+                            max_value=150.0,  # Ajustez le max selon la capacité max de vos électrolyseurs
+                            value=intensite_defaut,
+                            step=0.5,
+                            key=f"intensite_{nom}"
+                        )
                         
-                        # Sécurisation de la valeur par défaut
-                        valeur_hcl_defaut = min(float(round(q_hcl_theorique, 1)), 1000.0)
+                        # 3. Calcul dynamique du seuil critique basé sur l'intensité fixée manuellement
+                        seuil_hcl_critique = ((-3.691 * 92) + 362.7) * intensite_actuelle
                         
-                        # Modification de max_value à 1000.0 pour permettre l'alerte
+                        # On limite la valeur par défaut du débit à une valeur très haute (2000.0) par sécurité
+                        valeur_hcl_defaut = min(float(round(q_hcl_theorique, 1)), 2000.0)
+                        
                         hcl_mesure = st.number_input(
                             f"Débit HCl lu (L/h)", 
                             min_value=0.0, 
-                            max_value=1000.0, 
+                            max_value=2000.0, 
                             value=valeur_hcl_defaut, 
                             step=1.0, 
                             key=f"hcl_{nom}"
@@ -308,9 +334,15 @@ elif page_choisie == "⚙️ Aide au réglage débit HCl":
                             key=f"o2_{nom}"
                         )
                         
-                        # Affichage de l'alerte si le débit dépasse le seuil critique
-                        if hcl_mesure > seuil_hcl_critique:
-                            st.error("⚠️ **Alerte :** Le débit HCl est anormalement élevé. La membrane doit être endommagée !")
+                        # --- LOGIQUE DES ALERTES ---
+                        
+                        # Si le débit HCl dépasse la formule max (et qu'on a bien saisi une intensité > 0)
+                        if hcl_mesure > seuil_hcl_critique and seuil_hcl_critique > 0:
+                            st.error(f"⚠️ **Alerte :** Le débit HCl dépasse la limite maximale autorisée ({round(seuil_hcl_critique, 1)} L/h) pour {intensite_actuelle} kA. La membrane doit être endommagée !")
+                            
+                        # Si le débit est OK mais que le rendement historique est sous les 93%
+                        elif membrane_morte:
+                            st.warning("☠️ **Rappel visuel :** Membrane considérée comme **MORTE** (Rendement < 93% sur le tableau de bord).")
                         
                         # --- MOTEUR DE DIAGNOSTIC DE RÉGLAGE ---
                         diff_hcl_Lh = q_hcl_theorique - hcl_mesure 
