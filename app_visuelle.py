@@ -282,7 +282,7 @@ elif page_choisie == "⚙️ Aide au réglage débit HCl":
                         
                         # --- INPUTS MANUELS ---
                         st.markdown("**Mesures Terrain :**")
-                        hcl_mesure = st.number_input(f"Débit HCl lu (L/h)", min_value=0.0, max_value=300.0, value=float(round(q_hcl_theorique, 1)), step=1.0, key=f"hcl_{nom}")
+                        hcl_mesure = st.number_input(f"Débit HCl lu (L/h)", min_value=0.0, max_value=610.0, value=float(round(q_hcl_theorique, 1)), step=1.0, key=f"hcl_{nom}")
                         o2_mesure = st.number_input(f"Taux O₂ lu (%)", min_value=0.0, max_value=10.0, value=float(round(pct_o2_theorique_final, 2)), step=0.1, key=f"o2_{nom}")
                         
                         # --- MOTEUR DE DIAGNOSTIC DE RÉGLAGE ---
