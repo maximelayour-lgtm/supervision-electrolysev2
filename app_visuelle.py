@@ -280,18 +280,14 @@ elif page_choisie == "⚙️ Aide au réglage débit HCl":
                         
                         st.info(f"**Cibles Théoriques :**\n\n💧 HCl ciblé : **{q_hcl_theorique:.1f} L/h**\n\n💨 O₂ normal : **{pct_o2_theorique_final:.2f} %**")
                         
-                      # --- INPUTS MANUELS ---
-                       # 1. Vérification du rendement historique pour le rappel visuel
+                     # 1. Vérification du rendement historique pour le rappel visuel
                         membrane_morte = False
-                        intensite_defaut = 0.0
                         
                         if df is not None and not df.empty:
                             df_mono = df[df['Electrolyseur'] == str(nom)]
                             if not df_mono.empty:
-                                # On récupère la dernière ligne pour la valeur par défaut et le rendement
                                 derniere_ligne = df_mono.sort_values('Date').iloc[-1]
                                 derniere_ce = derniere_ligne['CE_Calcule']
-                                intensite_defaut = float(derniere_ligne['I_kA']) # Utilisé comme valeur initiale
                                 
                                 # Vérification du seuil de 93%
                                 if pd.notna(derniere_ce) and derniere_ce < 93.0:
@@ -300,18 +296,8 @@ elif page_choisie == "⚙️ Aide au réglage débit HCl":
                         # --- INPUTS MANUELS ---
                         st.markdown("**Mesures Terrain :**")
                         
-                        # 2. Saisie manuelle de l'intensité par l'utilisateur
-                        intensite_actuelle = st.number_input(
-                            f"Intensité actuelle (kA)",
-                            min_value=0.0,
-                            max_value=150.0,  # Ajustez le max selon la capacité max de vos électrolyseurs
-                            value=intensite_defaut,
-                            step=0.5,
-                            key=f"intensite_{nom}"
-                        )
-                        
-                        # 3. Calcul dynamique du seuil critique basé sur l'intensité fixée manuellement
-                        seuil_hcl_critique = ((-3.691 * 92) + 362.7) * intensite_actuelle
+                        # 2. Calcul dynamique du seuil critique basé sur l'intensité des transformateurs (cadence_kA)
+                        seuil_hcl_critique = ((-3.691 * 92) + 362.7) * cadence_kA
                         
                         # On limite la valeur par défaut du débit à une valeur très haute (2000.0) par sécurité
                         valeur_hcl_defaut = min(float(round(q_hcl_theorique, 1)), 2000.0)
@@ -336,13 +322,13 @@ elif page_choisie == "⚙️ Aide au réglage débit HCl":
                         
                         # --- LOGIQUE DES ALERTES ---
                         
-                        # Si le débit HCl dépasse la formule max (et qu'on a bien saisi une intensité > 0)
+                        # Si le débit HCl dépasse la formule max (et qu'on a bien une intensité > 0)
                         if hcl_mesure > seuil_hcl_critique and seuil_hcl_critique > 0:
-                            st.error(f"⚠️ **Alerte :** Le débit HCl dépasse la limite maximale autorisée ({round(seuil_hcl_critique, 1)} L/h) pour {intensite_actuelle} kA. La membrane doit être endommagée !")
+                            st.error(f"⚠️ **Alerte :** Le débit HCl dépasse la limite maximale autorisée ({round(seuil_hcl_critique, 1)} L/h) pour {round(cadence_kA, 2)} kA. La membrane doit être endommagée !")
                             
                         # Si le débit est OK mais que le rendement historique est sous les 93%
                         elif membrane_morte:
-                            st.warning("☠️ **Rappel :** Membrane considérée comme **H.S.** (CE < 93%.")
+                            st.warning("☠️ **Rappel :** Membrane considérée comme **H.S.** (CE < 93%).")
                         
                         # --- MOTEUR DE DIAGNOSTIC DE RÉGLAGE ---
                         diff_hcl_Lh = q_hcl_theorique - hcl_mesure 
