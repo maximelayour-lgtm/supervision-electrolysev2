@@ -43,7 +43,7 @@ def calculer_rendement(row):
 # MENU LATÉRAL (NAVIGATION & DONNÉES)
 # ==========================================
 st.sidebar.title("Navigation")
-page_choisie = st.sidebar.radio("Allez vers :", ["📊 Tableau de Bord", "⚙️ Simulateur & Réglages"])
+page_choisie = st.sidebar.radio("Allez vers :", ["📊 Tableau de Bord", "⚙️ Aide au réglage débit HCl"])
 
 st.sidebar.markdown("---")
 st.sidebar.header("📂 Chargement des données")
@@ -61,12 +61,8 @@ exemple_choisi = st.sidebar.selectbox(
      "04 - Panne soudaine",
      "05 - Année complète avec arrêts",
      "06 - test alerte HCl",
-     "07 - Test complet O2/HCl (4 phases)") # <-- MODIFIÉ ICI
+     "07 - Test complet O2/HCl (4 phases)")
 )
-
-st.sidebar.markdown("---")
-st.sidebar.header("⚙️ Paramètres d'analyse")
-tolerance_hcl = st.sidebar.slider("Tolérance Écart HCl (%)", min_value=3, max_value=8, value=5, step=1)
 
 df = None
 
@@ -82,14 +78,13 @@ elif exemple_choisi != "Aucun":
         "04 - Panne soudaine": "04_panne_soudaine.csv",
         "05 - Année complète avec arrêts": "05_annee_complete_incidents.csv",
         "06 - test alerte HCl": "06_test_alerte_hcl.csv",
-        "07 - Test complet O2/HCl (4 phases)": "07_test_complet_o2_hcl.csv" # <-- MODIFIÉ ICI
+        "07 - Test complet O2/HCl (4 phases)": "07_test_complet_o2_hcl.csv"
     }
     fichier_a_charger = fichiers_exemples[exemple_choisi]
     try:
         df = pd.read_csv(fichier_a_charger, sep=';', decimal=',')
-        st.sidebar.info(f"Données d'exemple activées : {exemple_choisi}")
     except FileNotFoundError:
-        st.sidebar.error("Fichier d'exemple introuvable. L'avez-vous bien uploadé sur GitHub ?")
+        st.sidebar.error("Fichier d'exemple introuvable.")
 
 # Pré-traitement global
 if df is not None:
@@ -102,6 +97,10 @@ if df is not None:
 # ==========================================
 if page_choisie == "📊 Tableau de Bord":
     st.title("📊 Tableau de Bord : Suivi des Électrolyseurs")
+    
+    st.sidebar.markdown("---")
+    st.sidebar.header("⚙️ Paramètres d'analyse")
+    tolerance_hcl = st.sidebar.slider("Tolérance Écart HCl (%)", min_value=3, max_value=8, value=5, step=1)
 
     if df is not None:
         resultats = []
@@ -188,105 +187,65 @@ if page_choisie == "📊 Tableau de Bord":
         st.info("Veuillez charger des données dans le menu latéral.")
 
 # ==========================================
-# PAGE 2 : SIMULATEUR ET RÉGLAGES
+# PAGE 2 : AIDE AU RÉGLAGE DÉBIT HCL
 # ==========================================
-elif page_choisie == "⚙️ Simulateur & Réglages":
-    st.title("⚙️ Simulateur et Préconisation de Réglages")
-    st.markdown("Ce module calcule les besoins théoriques de l'usine selon la charge des deux transformateurs, en se basant sur l'usure récente des membranes.")
+elif page_choisie == "⚙️ Aide au réglage débit HCl":
+    st.title("⚙️ Aide au réglage du débit HCl")
+    st.markdown("Ce module simule les besoins théoriques (O2 et HCl) basés sur l'état d'usure des membranes du dernier mois, et les compare avec vos saisies terrain manuelles.")
     
     if df is not None:
+        # 1. Extraction des états de santé (CE Moyen)
         ce_moyens = {}
         for nom, groupe in df.groupby('Electrolyseur'):
             groupe_propre = groupe.dropna(subset=['CE_Calcule']).copy()
             if len(groupe_propre) > 0:
                 date_limite = groupe_propre['Date'].max() - pd.Timedelta(days=30)
                 groupe_recent = groupe_propre[groupe_propre['Date'] >= date_limite]
-                if len(groupe_recent) > 0:
+                if len(groupe_recent) >= 3:
                     ce_moyens[nom] = groupe_recent['CE_Calcule'].mean()
-        
-        st.subheader("1. Définir la consigne des Transformateurs")
-        
-        tr1_presents = [e for e in ['303', '304', '305'] if e in ce_moyens]
-        tr2_presents = [e for e in ['306', '307'] if e in ce_moyens]
-        
+                else:
+                    ce_moyens[nom] = groupe_propre['CE_Calcule'].mean()
+
+        # 2. CONFIGURATION MANUELLE DES TRANSFORMATEURS (Plafond à 20kA/équipement)
+        st.subheader("1. Configuration de la cadence et des Transformateurs")
         col_tr1, col_tr2 = st.columns(2)
         
         with col_tr1:
             st.markdown("⚡ **Transformateur 1 (303, 304, 305)**")
-            if tr1_presents:
-                min_tr1 = len(tr1_presents) * 7.0
-                max_tr1 = len(tr1_presents) * 100.0
-                val_tr1 = len(tr1_presents) * 15.0
-                i_tr1 = st.number_input("Consigne globale TR1 (kA)", min_value=min_tr1, max_value=max_tr1, value=val_tr1, step=1.0)
-                i_par_elec_tr1 = i_tr1 / len(tr1_presents)
-                st.info(f"➡️ **{i_par_elec_tr1:.1f} kA** distribués par électrolyseur ({', '.join(tr1_presents)})")
-            else:
-                st.warning("Aucun électrolyseur du TR1 n'est actif.")
-                i_par_elec_tr1 = 0
+            elecs_actifs_tr1 = []
+            for e in ['303', '304', '305']:
+                if e in ce_moyens and st.checkbox(f"Électrolyseur {e} en service", value=True, key=f"check_{e}"):
+                    elecs_actifs_tr1.append(e)
+            
+            if elecs_actifs_tr1:
+                max_tr1_autorise = float(len(elecs_actifs_tr1) * 20.0) # Plafond strict : 20 kA par équipement actif
+                valeur_defaut_tr1 = float(len(elecs_actifs_tr1) * 15.0)
                 
+                i_tr1 = st.number_input("Consigne globale mesurée ou cible TR1 (kA)", min_value=0.0, max_value=max_tr1_autorise, value=valeur_defaut_tr1, step=1.0, key="input_tr1")
+                i_par_elec_tr1 = i_tr1 / len(elecs_actifs_tr1)
+                st.info(f"📋 Cadence simulée : **{i_par_elec_tr1:.1f} kA** par appareil actif. (Maximum toléré : 20.0 kA)")
+            else:
+                st.warning("Aucun équipement en service sur le TR1.")
+                i_par_elec_tr1 = 0.0
+
         with col_tr2:
             st.markdown("⚡ **Transformateur 2 (306, 307)**")
-            if tr2_presents:
-                min_tr2 = len(tr2_presents) * 7.0
-                max_tr2 = len(tr2_presents) * 100.0
-                val_tr2 = len(tr2_presents) * 15.0
-                i_tr2 = st.number_input("Consigne globale TR2 (kA)", min_value=min_tr2, max_value=max_tr2, value=val_tr2, step=1.0)
-                i_par_elec_tr2 = i_tr2 / len(tr2_presents)
-                st.info(f"➡️ **{i_par_elec_tr2:.1f} kA** distribués par électrolyseur ({', '.join(tr2_presents)})")
+            elecs_actifs_tr2 = []
+            for e in ['306', '307']:
+                if e in ce_moyens and st.checkbox(f"Électrolyseur {e} en service", value=True, key=f"check_{e}"):
+                    elecs_actifs_tr2.append(e)
+            
+            if elecs_actifs_tr2:
+                max_tr2_autorise = float(len(elecs_actifs_tr2) * 20.0) # Plafond strict : 20 kA par équipement actif
+                valeur_defaut_tr2 = float(len(elecs_actifs_tr2) * 15.0)
+                
+                i_tr2 = st.number_input("Consigne globale mesurée ou cible TR2 (kA)", min_value=0.0, max_value=max_tr2_autorise, value=valeur_defaut_tr2, step=1.0, key="input_tr2")
+                i_par_elec_tr2 = i_tr2 / len(elecs_actifs_tr2)
+                st.info(f"📋 Cadence simulée : **{i_par_elec_tr2:.1f} kA** par appareil actif. (Maximum toléré : 20.0 kA)")
             else:
-                st.warning("Aucun électrolyseur du TR2 n'est actif.")
-                i_par_elec_tr2 = 0
+                st.warning("Aucun équipement en service sur le TR2.")
+                i_par_elec_tr2 = 0.0
 
         st.markdown("---")
-        st.subheader("2. Saisie des mesures réelles & Diagnostics")
         
-        cols = st.columns(len(ce_moyens))
-        
-        for i, (nom, ce_moyen) in enumerate(ce_moyens.items()):
-            with cols[i]:
-                st.markdown(f"### Élec. {nom}")
-                st.write(f"*(Rendement : {ce_moyen:.1f}%)*")
-                
-                if nom in ['303', '304', '305']:
-                    cadence_kA = i_par_elec_tr1
-                elif nom in ['306', '307']:
-                    cadence_kA = i_par_elec_tr2
-                else:
-                    cadence_kA = 0
-                    
-                if cadence_kA > 0:
-                    I_A = cadence_kA * 1000
-                    perte_rendement = 1 - (ce_moyen / 100)
-                    
-                    destr_oh_kmol_h = (I_A * N_CELLULES * perte_rendement / F) * 3.6
-                    q_hcl_theorique = ((destr_oh_kmol_h * M_HCL) / CONC_HCL) / DENSITE_HCL
-                    
-                    prod_cl2_kg = (I_A * M_CL2 * 3600 * RENDEMENT_ANO * N_CELLULES) / (2 * F * 1000)
-                    moles_cl2 = prod_cl2_kg / M_CL2
-                    eq_o2 = destr_oh_kmol_h / 4
-                    pct_o2_theorique = (eq_o2 / (moles_cl2 + eq_o2)) * 100
-                    
-                    st.info(f"**Cibles Théoriques :**\n\n💧 HCl : {q_hcl_theorique:.1f} L/h\n\n💨 O2 : {pct_o2_theorique:.2f} %")
-                    
-                    hcl_mesure = st.number_input(f"HCl mesuré (L/h)", min_value=0.0, value=float(round(q_hcl_theorique, 1)), step=1.0, key=f"hcl_{nom}")
-                    o2_mesure = st.number_input(f"O2 mesuré (%)", min_value=0.0, value=float(round(pct_o2_theorique, 2)), step=0.1, key=f"o2_{nom}")
-                    
-                    ecart_hcl_pct = ((hcl_mesure - q_hcl_theorique) / q_hcl_theorique) * 100 if q_hcl_theorique > 0 else 0
-                    ecart_o2 = o2_mesure - pct_o2_theorique
-                    
-                    tol_hcl = 5.0
-                    tol_o2 = 0.3
-                    
-                    if abs(ecart_o2) <= tol_o2 and ecart_hcl_pct > tol_hcl:
-                        st.warning("📉 **Baisser la pompe d'acide** (Surdosage inutile, l'O2 est normal).")
-                    elif ecart_o2 > tol_o2 and ecart_hcl_pct < -tol_hcl:
-                        st.error("📈 **Augmenter l'acide !** (Manque de neutralisation, O2 trop haut).")
-                    elif abs(ecart_o2) <= tol_o2 and abs(ecart_hcl_pct) <= tol_hcl:
-                        st.success("✅ **Réglage Optimal.**")
-                    else:
-                        st.warning("⚠️ **Anomalie terrain.** Les deux sondes (O2 et débitmètre) divergent anormalement. Vérifiez l'analyseur O2.")
-                else:
-                    st.write("Équipement à l'arrêt.")
-                
-    else:
-        st.info("Veuillez charger des données dans le menu latéral pour utiliser le simulateur.")
+        # 3. INTERFACE DE COMPARAISON TERRAIN (SAISIE ET
