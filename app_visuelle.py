@@ -280,10 +280,37 @@ elif page_choisie == "⚙️ Aide au réglage débit HCl":
                         
                         st.info(f"**Cibles Théoriques :**\n\n💧 HCl ciblé : **{q_hcl_theorique:.1f} L/h**\n\n💨 O₂ normal : **{pct_o2_theorique_final:.2f} %**")
                         
-                        # --- INPUTS MANUELS ---
+                      # --- INPUTS MANUELS ---
                         st.markdown("**Mesures Terrain :**")
-                        hcl_mesure = st.number_input(f"Débit HCl lu (L/h)", min_value=0.0, max_value=610.0, value=float(round(q_hcl_theorique, 1)), step=1.0, key=f"hcl_{nom}")
-                        o2_mesure = st.number_input(f"Taux O₂ lu (%)", min_value=0.0, max_value=10.0, value=float(round(pct_o2_theorique_final, 2)), step=0.1, key=f"o2_{nom}")
+                        
+                        # Calcul du seuil critique d'alerte (environ 462.56)
+                        seuil_hcl_critique = ((-3.691 * 92) + 362.7) * 20
+                        
+                        # Sécurisation de la valeur par défaut
+                        valeur_hcl_defaut = min(float(round(q_hcl_theorique, 1)), 1000.0)
+                        
+                        # Modification de max_value à 1000.0 pour permettre l'alerte
+                        hcl_mesure = st.number_input(
+                            f"Débit HCl lu (L/h)", 
+                            min_value=0.0, 
+                            max_value=1000.0, 
+                            value=valeur_hcl_defaut, 
+                            step=1.0, 
+                            key=f"hcl_{nom}"
+                        )
+                        
+                        o2_mesure = st.number_input(
+                            f"Taux O₂ lu (%)", 
+                            min_value=0.0, 
+                            max_value=10.0, 
+                            value=float(round(pct_o2_theorique_final, 2)), 
+                            step=0.1, 
+                            key=f"o2_{nom}"
+                        )
+                        
+                        # Affichage de l'alerte si le débit dépasse le seuil critique
+                        if hcl_mesure > seuil_hcl_critique:
+                            st.error("⚠️ **Alerte :** Le débit HCl est anormalement élevé. La membrane doit être endommagée !")
                         
                         # --- MOTEUR DE DIAGNOSTIC DE RÉGLAGE ---
                         diff_hcl_Lh = q_hcl_theorique - hcl_mesure 
