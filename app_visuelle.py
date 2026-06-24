@@ -151,8 +151,7 @@ if page_choisie == "📊 Tableau de Bord":
                 'Δ CE/mois': f"{(pente_ce_jour * 30):+.3f} %",
                 'Δ R/mois': f"{(pente_r_jour * 30):+.4f} Ω",
                 'Membrane': "🔴 FIN DE VIE" if ce_moyen_recent < SEUIL_CE_CRITIQUE else ("⚠️ CHUTE" if (pente_ce_jour * 30) < MAX_PERTE_CE_PAR_MOIS else "✅ Normal"),
-                'Revêtement': "⚠️ USURE" if (pente_r_jour * 30) > MAX_HAUSSE_R_PAR_MOIS else "✅ Normal",
-                'Injection HCl': diag_coherence
+                'Revêtement': "⚠️ USURE" if (pente_r_jour * 30) > MAX_HAUSSE_R_PAR_MOIS else "✅ Normal"
             })
 
         col_titre, col_filtre = st.columns([2, 1])
